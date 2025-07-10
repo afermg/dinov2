@@ -62,5 +62,7 @@ buildPythonPackage {
     description = "dinov2";
     homepage = "https://github.com/afermg/dinov2";
     license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [afermg];
+    platforms = lib.platforms.all;
   };
 }
