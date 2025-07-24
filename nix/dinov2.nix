@@ -13,13 +13,11 @@
   fvcore,
   iopath,
   xformers,
-  submitit,
+  #submitit,
   # Extras
   mmcv,
   # Server,
-  fastapi,
-  fastapi-cli,
-  orjson,
+  datasets,
 }:
 buildPythonPackage {
   pname = "dinov2";
@@ -46,13 +44,11 @@ buildPythonPackage {
     fvcore
     iopath
     xformers
-    submitit
+    #submitit
     # extras
     # mmcv
     # Server
-    fastapi
-    fastapi-cli
-    orjson
+    datasets
   ];
 
   pythonImportsCheck = [
