@@ -13,7 +13,7 @@
   fvcore,
   iopath,
   xformers,
-  #submitit,
+  submitit,
   # Extras
   mmcv,
   # Server,
@@ -44,7 +44,7 @@ buildPythonPackage {
     fvcore
     iopath
     xformers
-    #submitit
+    submitit
     # extras
     # mmcv
     # Server
