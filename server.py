@@ -13,6 +13,7 @@ import numpy
 import pynng
 import torch
 import trio
+from nahual.server import responder
 
 PARAMETERS = {}
 
@@ -85,13 +86,12 @@ async def main():
     -------
     None
     """
-    from nahual_server import responder
 
     with pynng.Rep0(listen=address, recv_timeout=300) as sock:
         print(f"Server listening on {address}")
         async with trio.open_nursery() as nursery:
-            responder_wsetup = partial(responder, setup=setup)
-            nursery.start_soon(responder_wsetup, sock)
+            responder_curried = partial(responder, setup=setup)
+            nursery.start_soon(responder_curried, sock)
 
 
 if __name__ == "__main__":

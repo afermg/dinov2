@@ -49,11 +49,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1755898420,
-        "narHash": "sha256-G0Nuwm1+dLzUwlYvcPWObU53oaOyMTnJMInYHVvF8vw=",
+        "lastModified": 1755901421,
+        "narHash": "sha256-8D4+o4ceHUftEtY99W0tyFihcQ2ZFGSoINjTgRshMnY=",
         "owner": "afermg",
         "repo": "nahual",
-        "rev": "c2c7180bdb077245d601456bc785440bd949bdd7",
+        "rev": "2faa5b256e13e302bb84510c32f85f6fc9ce0eb5",
         "type": "github"
       },
       "original": {

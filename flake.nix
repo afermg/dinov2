@@ -13,7 +13,7 @@
       self,
       nixpkgs,
       flake-utils,
-      Systems,
+      systems,
       ...
     }@inputs:
     flake-utils.lib.eachDefaultSystem (
