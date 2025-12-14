@@ -20,12 +20,14 @@ from nahual.server import responder
 address = sys.argv[1]
 
 guardrail_shapes = {
-    "dinov2_vits14_lc": (3, (1, 420, 420)),
+    "dinov2": (3, (1, 420, 420)),
 }
 
 
 def setup(
-    repo_or_dir: str = "facebookresearch/dinov2", model_name: str = "dinov2_vits14_lc"
+    repo_or_dir: str = "facebookresearch/dinov2",
+    model_name: str = "dinov2_vits14_lc",
+    execution_params: dict = {},
 ) -> dict:
     """Set up the repo/dir and configuration, following `torch.hub.load`.
 
@@ -49,9 +51,7 @@ def setup(
     setup_kwargs["repo_or_dir"] = repo_or_dir
     setup_kwargs["model_name"] = model_name
 
-    execution_params = {}
-
-    expected_channels, expected_zyx = guardrail_shapes[model_name]
+    expected_channels, expected_zyx = guardrail_shapes[model_name.split("_")[0]]
     execution_params["expected_channels"] = expected_channels
     execution_params["expected_zyx"] = expected_zyx
 
@@ -65,6 +65,7 @@ def process(
     processor: Callable,
     expected_zyx: tuple[int],
     expected_channels: int,
+    channels: tuple[int] | None,
 ) -> numpy.ndarray:
     """Process a tensor of pixels using a given processor.
 
@@ -92,6 +93,12 @@ def process(
     numpy.ndarray
         The result from the processor.
     """
+    input_channels = pixels.shape[2]
+
+    # Case when # channels < 3
+    if input_channels > expected_channels:
+        pixels = pixels[:, :, channels]
+
     _, input_channels, *input_zyx = pixels.shape
 
     validate_input_shape(input_zyx, expected_zyx)
