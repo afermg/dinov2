@@ -26,9 +26,19 @@
             cudaSupport = true;
           };
         };
+        runServer = pkgs.writeScriptBin "runserver.sh" ''
+          #!${pkgs.bash}/bin/bash
+          python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
+        '';
+
       in
       with pkgs;
       rec {
+        apps.default = {
+          type = "app";
+          program = "${runServer}/bin/runserver.sh";
+        };
+
         formatter = pkgs.alejandra;
         packages = pkgs.callPackage ./nix { };
         devShells = {
