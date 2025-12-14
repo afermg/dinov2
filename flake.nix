@@ -28,7 +28,7 @@
         };
         runServer = pkgs.writeScriptBin "runserver.sh" ''
           #!${pkgs.bash}/bin/bash
-          python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
+          ${pkgs.python3} server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
         '';
       in
       with pkgs;
