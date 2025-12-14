@@ -26,18 +26,25 @@
             cudaSupport = true;
           };
         };
-        runServer = pkgs.writeScriptBin "runserver.sh" ''
-          #!${pkgs.bash}/bin/bash
-          ${pkgs.python}/bin/python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
-        '';
       in
       with pkgs;
       rec {
-        apps.default = {
-          type = "app";
-          program = "${runServer}/bin/runserver.sh";
-        };
-        Formatter = pkgs.alejandra;
+        apps.default =
+          let
+            python_with_pkgs = python3.withPackages (pp: [
+              (inputs.nahual-flake.packages.${system}.nahual)
+              packages.dinov2
+            ]);
+            runServer = pkgs.writeScriptBin "runserver.sh" ''
+              #!${pkgs.bash}/bin/bash
+              ${python_with_pkgs}/bin/python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
+            '';
+          in
+          {
+            type = "app";
+            program = "${runServer}/bin/runserver.sh";
+          };
+        formatter = pkgs.alejandra;
         packages = pkgs.callPackage ./nix { };
         devShells = {
           default =
