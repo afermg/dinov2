@@ -28,7 +28,7 @@
         };
         runServer = pkgs.writeScriptBin "runserver.sh" ''
           #!${pkgs.bash}/bin/bash
-          ${self}/.venv/bin/python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
+          ${pkgs.python}/bin/python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
         '';
       in
       with pkgs;
@@ -37,7 +37,7 @@
           type = "app";
           program = "${runServer}/bin/runserver.sh";
         };
-        formatter = pkgs.alejandra;
+        Formatter = pkgs.alejandra;
         packages = pkgs.callPackage ./nix { };
         devShells = {
           default =
