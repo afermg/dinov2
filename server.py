@@ -13,16 +13,19 @@ import numpy
 import pynng
 import torch
 import trio
+from nahual.preprocess import pad_channel_dim, validate_input_shape
 from nahual.server import responder
-
-PARAMETERS = {}
 
 # address = "ipc:///tmp/dinov2.ipc"
 address = sys.argv[1]
 
+guardrail_shapes = {
+    "dinov2_vits14_lc": (3, (1, 420, 420)),
+}
+
 
 def setup(
-    repo_or_dir: str = "facebookresearch/dinov2", model: str = "dinov2_vits14_lc"
+    repo_or_dir: str = "facebookresearch/dinov2", model_name: str = "dinov2_vits14_lc"
 ) -> dict:
     """Set up the repo/dir and configuration, following `torch.hub.load`.
 
@@ -39,33 +42,64 @@ def setup(
         A dictionary containing the device information and configuration parameters.
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    loaded_model = processor = torch.hub.load(repo_or_dir, model).to(device)
+    loaded_model = processor = torch.hub.load(repo_or_dir, model_name).to(device)
 
-    processor = partial(process, processor=loaded_model)
+    setup_kwargs = dict()
 
-    PARAMETERS["repo_or_dir"] = repo_or_dir
-    PARAMETERS["model"] = model
+    setup_kwargs["repo_or_dir"] = repo_or_dir
+    setup_kwargs["model_name"] = model_name
 
-    info = {"device": device, **PARAMETERS}
+    execution_params = {}
+
+    expected_channels, expected_zyx = guardrail_shapes[model_name]
+    execution_params["expected_channels"] = expected_channels
+    execution_params["expected_zyx"] = expected_zyx
+
+    processor = partial(process, processor=loaded_model, **execution_params)
+    info = {"device": device, **setup_kwargs}
     return processor, info
 
 
-def process(img: numpy.ndarray, processor: Callable) -> dict:
-    """Process an image and masks to generate a graph-based tracking representation.
+def process(
+    pixels: numpy.ndarray,
+    processor: Callable,
+    expected_zyx: tuple[int],
+    expected_channels: int,
+) -> numpy.ndarray:
+    """Process a tensor of pixels using a given processor.
+
+    This function validates the input shape, pads the channel dimension if
+    necessary, converts the data to a PyTorch tensor, and runs it through
+    the provided processor on a CUDA device.
 
     Parameters
     ----------
-    img : array-like
-        The input image data.
-    processor : torch.Model
-        Loaded torch model
+    pixels : numpy.ndarray
+        The input image data as a NumPy array. The expected shape is
+        (batch, channels, z, y, x).
+    processor : Callable
+        A PyTorch model or other callable that accepts a PyTorch tensor and
+        returns the processed result.
+    expected_zyx : tuple[int]
+        A tuple representing the expected spatial dimensions (depth, height, width)
+        of the input pixels.
+    expected_channels : int
+        The number of channels the input tensor should have. If the input
+        `pixels` has fewer channels, it will be padded.
 
     Returns
     -------
-    dict
-        A dictionary containing the edge table representation of the tracking graph.
+    numpy.ndarray
+        The result from the processor.
     """
-    torch_tensor = torch.from_numpy(img).float().cuda()
+    _, input_channels, *input_zyx = pixels.shape
+
+    validate_input_shape(input_zyx, expected_zyx)
+
+    pixels = pad_channel_dim(pixels, expected_channels)
+
+    torch_tensor = torch.from_numpy(pixels).float().cuda()
+
     result = processor(torch_tensor)
 
     return result

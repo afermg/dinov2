@@ -30,7 +30,6 @@
           #!${pkgs.bash}/bin/bash
           python server.py ''${@:-"ipc:///tmp/dinov2.ipc"}
         '';
-
       in
       with pkgs;
       rec {
@@ -38,7 +37,6 @@
           type = "app";
           program = "${runServer}/bin/runserver.sh";
         };
-
         formatter = pkgs.alejandra;
         packages = pkgs.callPackage ./nix { };
         devShells = {
