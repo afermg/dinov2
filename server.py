@@ -65,7 +65,6 @@ def process(
     processor: Callable,
     expected_zyx: tuple[int],
     expected_channels: int,
-    channels: tuple[int] | None,
 ) -> numpy.ndarray:
     """Process a tensor of pixels using a given processor.
 
