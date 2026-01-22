@@ -77,7 +77,7 @@
                 runHook venvShellHook
                 # export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
                 # Set PYTHONPATH to only include the Nix packages, excluding current directory
-                export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}
+                export PYTHONPATH=~/projects/nahual/src/:${python_with_pkgs}/${python_with_pkgs.sitePackages}
                 # Ensure current directory is not in Python path
                 export PYTHONDONTWRITEBYTECODE=1
               '';

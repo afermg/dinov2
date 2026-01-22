@@ -19,15 +19,13 @@ from nahual.server import responder
 # address = "ipc:///tmp/dinov2.ipc"
 address = sys.argv[1]
 
-guardrail_shapes = {
-    "dinov2": (3, (1, 420, 420)),
-}
-
 
 def setup(
     repo_or_dir: str = "facebookresearch/dinov2",
-    model_name: str = "dinov2_vits14_lc",
+    model_name: str = "dinov2_vits14",
     execution_params: dict = {},
+    device: int | None = None,
+    pretrained: bool = True,
 ) -> dict:
     """Set up the repo/dir and configuration, following `torch.hub.load`.
 
@@ -43,28 +41,36 @@ def setup(
     dict
         A dictionary containing the device information and configuration parameters.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    loaded_model = processor = torch.hub.load(repo_or_dir, model_name).to(device)
+    assert torch.cuda.is_available(), "Cuda is not available"
+    if device is None:
+        device = 0
+    device = torch.device(int(device))
+
+    loaded_model = torch.hub.load(repo_or_dir, model_name, pretrained=pretrained).to(
+        device
+    )
 
     setup_kwargs = dict()
 
     setup_kwargs["repo_or_dir"] = repo_or_dir
     setup_kwargs["model_name"] = model_name
 
-    expected_channels, expected_zyx = guardrail_shapes[model_name.split("_")[0]]
-    execution_params["expected_channels"] = expected_channels
-    execution_params["expected_zyx"] = expected_zyx
+    execution_params["expected_channels"] = 3
+    execution_params["expected_tile_size"] = 14
 
-    processor = partial(process, processor=loaded_model, **execution_params)
-    info = {"device": device, **setup_kwargs}
+    processor = partial(
+        process, processor=loaded_model, device=device, **execution_params
+    )
+    info = {"device": str(device), **setup_kwargs}
     return processor, info
 
 
 def process(
     pixels: numpy.ndarray,
     processor: Callable,
-    expected_zyx: tuple[int],
+    expected_tile_size: tuple[int],
     expected_channels: int,
+    device: torch.device,
 ) -> numpy.ndarray:
     """Process a tensor of pixels using a given processor.
 
@@ -80,9 +86,8 @@ def process(
     processor : Callable
         A PyTorch model or other callable that accepts a PyTorch tensor and
         returns the processed result.
-    expected_zyx : tuple[int]
-        A tuple representing the expected spatial dimensions (depth, height, width)
-        of the input pixels.
+    expected_tile_size : tuple[int]
+        A tuple representing the expected size of the last two dimensions (yx).
     expected_channels : int
         The number of channels the input tensor should have. If the input
         `pixels` has fewer channels, it will be padded.
@@ -95,17 +100,20 @@ def process(
     input_channels = pixels.shape[2]
 
     # Case when # channels < 3
-    if input_channels > expected_channels:
-        pixels = pixels[:, :, channels]
+    # if input_channels > expected_channels:
+    #     pixels = pixels[:, :, channels]
 
-    _, input_channels, *input_zyx = pixels.shape
+    _, input_channels, _, *input_yx = pixels.shape
 
-    validate_input_shape(input_zyx, expected_zyx)
+    validate_input_shape(input_yx, expected_tile_size)
 
+    # This one is necessary to have the correct shape of all dims
+    # [N, 3, M*14, M*14] (divisible by 14)
     pixels = pad_channel_dim(pixels, expected_channels)
 
-    torch_tensor = torch.from_numpy(pixels).float().cuda()
+    torch_tensor = torch.from_numpy(pixels).float().cuda().to(device)
 
+    print(f"Input shape {torch_tensor.shape}")
     result = processor(torch_tensor)
 
     return result
