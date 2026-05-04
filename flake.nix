@@ -6,6 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     flake-utils.inputs.systems.follows = "systems";
     nahual-flake.url = "github:afermg/nahual";
+    nahual-flake.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -77,7 +78,7 @@
                 runHook venvShellHook
                 # export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
                 # Set PYTHONPATH to only include the Nix packages, excluding current directory
-                export PYTHONPATH=~/projects/nahual/src/:${python_with_pkgs}/${python_with_pkgs.sitePackages}
+                export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}
                 # Ensure current directory is not in Python path
                 export PYTHONDONTWRITEBYTECODE=1
               '';
