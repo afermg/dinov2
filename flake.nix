@@ -76,10 +76,11 @@
                 export TORCH_CUDA_ARCH_LIST="6.0;6.1;7.0;7.5;8.0;8.6"
                 export CUDA_NVCC_FLAGS="-O2 -Xcompiler -fno-PIC"
                 runHook venvShellHook
-                # export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}:$PYTHONPATH
-                # Set PYTHONPATH to only include the Nix packages, excluding current directory
-                export PYTHONPATH=${python_with_pkgs}/${python_with_pkgs.sitePackages}
-                # Ensure current directory is not in Python path
+                # PYTHONSAFEPATH=1 (Python 3.11+) keeps Python from prepending
+                # the script's directory (or cwd for python -c mode) to
+                # sys.path, which would otherwise let the in-tree dinov2/
+                # source dir shadow the nix-built package.
+                export PYTHONSAFEPATH=1
                 export PYTHONDONTWRITEBYTECODE=1
               '';
             };
