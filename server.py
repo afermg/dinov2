@@ -97,11 +97,7 @@ def process(
             if hasattr(result, "detach"):
                 result = result.detach().cpu().numpy()
             outs.append(result)
-        return numpy.concatenate(outs, axis=1)
-
-        print(f"Input shape {torch_tensor.shape}")
-
-    return result
+    return numpy.concatenate(outs, axis=1)
 
 
 async def main():
