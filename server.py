@@ -13,7 +13,7 @@ import numpy
 import pynng
 import torch
 import trio
-from nahual.preprocess import pad_channel_dim, validate_input_shape
+from nahual.preprocess import channel_chunks_rigid3, validate_input_shape
 from nahual.server import responder
 
 # address = "ipc:///tmp/dinov2.ipc"
@@ -72,51 +72,29 @@ def process(
     expected_channels: int,
     device: torch.device,
 ) -> numpy.ndarray:
-    """Process a tensor of pixels using a given processor.
+    """Run DINOv2 on an NCZYX numpy array.
 
-    This function validates the input shape, pads the channel dimension if
-    necessary, converts the data to a PyTorch tensor, and runs it through
-    the provided processor on a CUDA device.
-
-    Parameters
-    ----------
-    pixels : numpy.ndarray
-        The input image data as a NumPy array. The expected shape is
-        (batch, channels, z, y, x).
-    processor : Callable
-        A PyTorch model or other callable that accepts a PyTorch tensor and
-        returns the processed result.
-    expected_tile_size : tuple[int]
-        A tuple representing the expected size of the last two dimensions (yx).
-    expected_channels : int
-        The number of channels the input tensor should have. If the input
-        `pixels` has fewer channels, it will be padded.
-
-    Returns
-    -------
-    numpy.ndarray
-        The result from the processor.
+    DINOv2 is a rigid 3-channel ImageNet ViT. Inputs with C ≠ 3 are split
+    into ``ceil(C/3)`` overlapping 3-channel chunks via
+    :func:`nahual.preprocess.channel_chunks_rigid3` (recycling leading
+    channels for the trailing chunk), the backbone is run on each chunk,
+    and per-chunk cls tokens are concatenated along the feature axis.
+    Final shape is ``(N, D · ceil(C/3))``.
     """
-    input_channels = pixels.shape[2]
-
-    # Case when # channels < 3
-    # if input_channels > expected_channels:
-    #     pixels = pixels[:, :, channels]
-
-    _, input_channels, _, *input_yx = pixels.shape
-
+    if pixels.ndim != 5:
+        raise ValueError(f"Expected NCZYX (5D) array, got shape {pixels.shape}")
+    _, _, _, *input_yx = pixels.shape
     validate_input_shape(input_yx, expected_tile_size)
 
-    # This one is necessary to have the correct shape of all dims
-    # [N, 3, M*14, M*14] (divisible by 14)
-    pixels = pad_channel_dim(pixels, expected_channels)
-
-    torch_tensor = torch.from_numpy(pixels).float().cuda().to(device)
-
-    print(f"Input shape {torch_tensor.shape}")
-    result = processor(torch_tensor)
-
-    return result
+    chunks = channel_chunks_rigid3(pixels)
+    outs = []
+    for chunk in chunks:
+        torch_tensor = torch.from_numpy(chunk.copy()).float().to(device)
+        result = processor(torch_tensor)
+        if hasattr(result, "detach"):
+            result = result.detach().cpu().numpy()
+        outs.append(result)
+    return numpy.concatenate(outs, axis=1)
 
 
 async def main():
