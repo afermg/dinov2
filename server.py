@@ -49,6 +49,7 @@ def setup(
     loaded_model = torch.hub.load(repo_or_dir, model_name, pretrained=pretrained).to(
         device
     )
+    loaded_model.eval()
 
     setup_kwargs = dict()
 
@@ -74,28 +75,24 @@ def process(
 ) -> numpy.ndarray:
     """Process a tensor of pixels using a given processor.
 
-    This function validates the input shape, pads the channel dimension if
-    necessary, converts the data to a PyTorch tensor, and runs it through
-    the provided processor on a CUDA device.
+    Input contract (caller side)
+    ----------------------------
+    pixels : NCZYX float32; H, W divisible by 14; Z=1.
+        Exactly 3 channels (RGB-like). Fewer channels are zero-padded to 3;
+        the caller is responsible for choosing which biological channels to
+        feed as R/G/B. For Cell Painting we use [AGP, DNA, ER].
+        Per-channel z-score normalize (subtract per-channel mean, divide by
+        per-channel std) before sending — DINOv2 was trained on standardized
+        inputs and expects this. Do NOT pass raw [0, 1] or [0, 255] pixels.
 
-    Parameters
-    ----------
-    pixels : numpy.ndarray
-        The input image data as a NumPy array. The expected shape is
-        (batch, channels, z, y, x).
-    processor : Callable
-        A PyTorch model or other callable that accepts a PyTorch tensor and
-        returns the processed result.
-    expected_tile_size : tuple[int]
-        A tuple representing the expected size of the last two dimensions (yx).
-    expected_channels : int
-        The number of channels the input tensor should have. If the input
-        `pixels` has fewer channels, it will be padded.
+    Server-side normalization (applied here)
+    ----------------------------------------
+    None — the backbone forward is called directly. Inference safety only
+    (``model.eval()`` + ``torch.no_grad()``) is set in ``setup``.
 
-    Returns
-    -------
-    numpy.ndarray
-        The result from the processor.
+    Output
+    ------
+    (N, 384) for vits14 — a single CLS-token embedding per tile.
     """
     input_channels = pixels.shape[2]
 
@@ -114,7 +111,8 @@ def process(
     torch_tensor = torch.from_numpy(pixels).float().cuda().to(device)
 
     print(f"Input shape {torch_tensor.shape}")
-    result = processor(torch_tensor)
+    with torch.no_grad():
+        result = processor(torch_tensor)
 
     return result
 
