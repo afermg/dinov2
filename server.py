@@ -75,31 +75,12 @@ def process(
 ) -> numpy.ndarray:
     """Run DINOv2 on an NCZYX numpy array.
 
-    Input contract (caller side)
-    ----------------------------
-    pixels : NCZYX float32; H, W divisible by 14; Z=1.
-        Any number of channels is accepted. DINOv2 is a rigid 3-channel
-        ImageNet ViT, so inputs with C ≠ 3 are split into ``ceil(C/3)``
-        overlapping 3-channel chunks via
-        :func:`nahual.preprocess.channel_chunks_rigid3` (recycling leading
-        channels for the trailing chunk); per-chunk cls tokens are
-        concatenated along the feature axis. For Cell Painting (5 channels)
-        the caller controls channel ordering — chunk boundaries fall between
-        adjacent channels, so keep biologically-related ones together.
-        Per-channel z-score normalize (subtract per-channel mean, divide by
-        per-channel std) before sending — DINOv2 was trained on standardized
-        inputs and expects this. Do NOT pass raw [0, 1] or [0, 255] pixels.
-
-    Server-side normalization (applied here)
-    ----------------------------------------
-    None — the backbone forward is called directly. Inference safety only
-    (``model.eval()`` set in ``setup`` + ``torch.no_grad()`` here) is
-    enforced.
-
-    Output
-    ------
-    ``(N, D · ceil(C/3))`` — concatenated cls tokens across passes. For
-    vits14 with C=3 this is ``(N, 384)``; with C=5 it is ``(N, 768)``.
+    DINOv2 is a rigid 3-channel ImageNet ViT. Inputs with C ≠ 3 are split
+    into ``ceil(C/3)`` overlapping 3-channel chunks via
+    :func:`nahual.preprocess.channel_chunks_rigid3` (recycling leading
+    channels for the trailing chunk), the backbone is run on each chunk,
+    and per-chunk cls tokens are concatenated along the feature axis.
+    Final shape is ``(N, D · ceil(C/3))``.
     """
     if pixels.ndim != 5:
         raise ValueError(f"Expected NCZYX (5D) array, got shape {pixels.shape}")
@@ -108,14 +89,19 @@ def process(
 
     chunks = channel_chunks_rigid3(pixels)
     outs = []
-    for chunk in chunks:
-        torch_tensor = torch.from_numpy(chunk.copy()).float().to(device)
-        with torch.no_grad():
+    # [N, 3, M*14, M*14] (divisible by 14)
+    with torch.no_grad():
+        for chunk in chunks:
+            torch_tensor = torch.from_numpy(chunk).float().cuda().to(device)
             result = processor(torch_tensor)
-        if hasattr(result, "detach"):
-            result = result.detach().cpu().numpy()
-        outs.append(result)
-    return numpy.concatenate(outs, axis=1)
+            if hasattr(result, "detach"):
+                result = result.detach().cpu().numpy()
+            outs.append(result)
+        return numpy.concatenate(outs, axis=1)
+
+        print(f"Input shape {torch_tensor.shape}")
+
+    return result
 
 
 async def main():
