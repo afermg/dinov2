@@ -5,6 +5,7 @@ This is the only reliable messaging pattern in the suite, as it automatically wi
 
 """
 
+import os
 import sys
 from functools import partial
 from typing import Callable
@@ -24,7 +25,7 @@ def setup(
     repo_or_dir: str = "facebookresearch/dinov2",
     model_name: str = "dinov2_vits14",
     execution_params: dict = {},
-    device: int | None = None,
+    device: int | str | None = None,
     pretrained: bool = True,
 ) -> dict:
     """Set up the repo/dir and configuration, following `torch.hub.load`.
@@ -41,13 +42,26 @@ def setup(
     dict
         A dictionary containing the device information and configuration parameters.
     """
-    assert torch.cuda.is_available(), "Cuda is not available"
     if device is None:
-        device = 0
-    device = torch.device(int(device))
+        torch_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    elif isinstance(device, int):
+        torch_device = (
+            torch.device(device) if torch.cuda.is_available() else torch.device("cpu")
+        )
+    else:
+        torch_device = torch.device(device)
+        if torch_device.type == "cuda" and not torch.cuda.is_available():
+            raise RuntimeError(
+                f"CUDA device requested but CUDA is unavailable: {device}"
+            )
+
+    # xFormers' memory-efficient attention kernels are CUDA-only. Disable
+    # them before Torch Hub imports DINOv2 when this container runs on CPU.
+    if torch_device.type == "cpu":
+        os.environ["XFORMERS_DISABLED"] = "1"
 
     loaded_model = torch.hub.load(repo_or_dir, model_name, pretrained=pretrained).to(
-        device
+        torch_device
     )
     loaded_model.eval()
 
@@ -60,9 +74,9 @@ def setup(
     execution_params["expected_tile_size"] = 14
 
     processor = partial(
-        process, processor=loaded_model, device=device, **execution_params
+        process, processor=loaded_model, device=torch_device, **execution_params
     )
-    info = {"device": str(device), **setup_kwargs}
+    info = {"device": str(torch_device), **setup_kwargs}
     return processor, info
 
 
@@ -92,7 +106,7 @@ def process(
     # [N, 3, M*14, M*14] (divisible by 14)
     with torch.no_grad():
         for chunk in chunks:
-            torch_tensor = torch.from_numpy(chunk).float().cuda().to(device)
+            torch_tensor = torch.from_numpy(chunk.copy()).float().to(device)
             result = processor(torch_tensor)
             if hasattr(result, "detach"):
                 result = result.detach().cpu().numpy()
