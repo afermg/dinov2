@@ -66,6 +66,7 @@ def setup(
     return processor, info
 
 
+@torch.inference_mode()
 def process(
     pixels: numpy.ndarray,
     processor: Callable,
@@ -90,13 +91,12 @@ def process(
     chunks = channel_chunks_rigid3(pixels)
     outs = []
     # [N, 3, M*14, M*14] (divisible by 14)
-    with torch.no_grad():
-        for chunk in chunks:
-            torch_tensor = torch.from_numpy(chunk).float().cuda().to(device)
-            result = processor(torch_tensor)
-            if hasattr(result, "detach"):
-                result = result.detach().cpu().numpy()
-            outs.append(result)
+    for chunk in chunks:
+        torch_tensor = torch.from_numpy(chunk).float().cuda().to(device)
+        result = processor(torch_tensor)
+        if hasattr(result, "detach"):
+            result = result.detach().cpu().numpy()
+        outs.append(result)
     return numpy.concatenate(outs, axis=1)
 
 
